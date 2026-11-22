@@ -52,6 +52,24 @@ jobs:
           print("OK: reproducible")
           PY
 
+      - name: Scan a pcap end to end (no docker)
+        run: |
+          python examples/make_sample_capture.py --out /tmp/sample >/dev/null
+          cat > /tmp/eve.json <<'JSON'
+          {"event_type":"alert","src_ip":"10.0.0.5","src_port":40001,"dest_ip":"10.0.0.9","dest_port":22,"proto":"TCP","alert":{"signature_id":1000001,"signature":"AETG sample: SSH connection attempt"}}
+          JSON
+          aetg-validate scan --pcap /tmp/sample/sample.pcap --eve-json /tmp/eve.json --out /tmp/scan
+          python - <<'PY'
+          import json
+          s = json.load(open("/tmp/scan/scan.json"))["summary"]
+          phi, raw = s["esr_phi_pct"], s["esr_feature_space_pct"]
+          assert (phi["k"], phi["n"]) == (1, 2), phi
+          assert (raw["k"], raw["n"]) == (2, 3), raw
+          assert s["population"]["n_gate_rejected"] == 1
+          assert open("/tmp/scan/report.pdf", "rb").read(8) == b"%PDF-1.4"
+          print("OK: Phi 50.00% (1/2) vs naive 66.67% (2/3), 1 flow gate-rejected")
+          PY
+
       - name: Tamper detection must fail
         run: |
           python - <<'PY'

@@ -87,6 +87,33 @@ Flow record fields (`flows.jsonl`, one object per line):
 * `detected` — did the IDS raise an alert for it?
 * `p_ids` — optional detector confidence, if it exposes one.
 
+### From a packet capture (the gate is decided from the capture, not by you)
+
+```bash
+# let this tool run Suricata for you (no implicit image pull)
+aetg-validate scan --pcap capture.pcap \
+  --docker-image jasonish/suricata:latest \
+  --rules local.rules --out aetg-scan
+
+# or bring the IDS log you already produced
+aetg-validate scan --pcap capture.pcap --eve-json /var/log/suricata/eve.json --out aetg-scan
+```
+
+In this mode a flow is Phi-valid only if the capture shows a **SYN answered by a
+SYN-ACK**. Flows that never opened a connection are excluded from the binding
+metric — the tool will not let a half-open scan pass for an evasion.
+
+Alerts are joined to flows by **5-tuple in both directions** (Suricata's internal
+`flow_id` has no relationship to a generator's ids; joining on it would silently
+report "nothing detected").
+
+`--gate observed` disables the gate; the report then says so in bold print,
+because that number is not comparable to a Phi-gated one.
+
+> Docker caveat: the daemon must be able to see the capture. If your shell's
+> `/tmp` is private (`systemd PrivateTmp`), docker will mount an empty directory
+> there — keep the pcap under your home directory.
+
 ### Verify a report someone sent you
 
 ```bash
@@ -127,12 +154,13 @@ not the report digest.
 | `scan.json` | canonical payload + provenance + digest (machine readable) |
 | `report.md` | human-readable summary (Markdown) |
 | `report.html` | self-contained, no JS, no external assets |
+| `report.pdf` | one-file artefact for auditors — generated in pure Python, no browser or LaTeX needed |
 
 ## Development
 
 ```bash
 make install   # editable install + pytest
-make test      # 28 tests
+make test      # 42 tests
 make verify    # tests + demo + digest re-verification
 ```
 

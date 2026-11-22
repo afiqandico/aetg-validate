@@ -16,7 +16,7 @@ import hmac
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 TOOL_NAME = "aetg-validate"
 
@@ -84,6 +84,88 @@ def sign(payload_digest: str, key: Optional[str] = None) -> Optional[Dict[str, s
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def pdf_lines(report: Dict[str, Any]) -> List[Tuple[str, float]]:
+    """Flatten a report into (text, size) rows for the PDF writer."""
+    from .pdf import BODY_SIZE, TITLE_SIZE
+
+    summary = report["summary"]
+    prov = report["provenance"]
+    rows: List[Tuple[str, float]] = [
+        ("IDS Evasion Validation Report", TITLE_SIZE),
+        (report["title"], BODY_SIZE),
+        ("", BODY_SIZE),
+        (f"Tool: {TOOL_NAME} {prov['tool_version']}    Generated: {prov['timestamp']}", BODY_SIZE),
+        (f"Provenance: {prov['kind']}", BODY_SIZE),
+        ("", BODY_SIZE),
+        ("BINDING RESULT", BODY_SIZE + 2),
+        (f"ESR (Phi-valid, binding): {_fmt_interval(summary.get('esr_phi_pct'))}".replace("**", ""), BODY_SIZE),
+        (f"Functional Validity Rate: {_fmt_interval(summary.get('fvr_pct'))}".replace("**", ""), BODY_SIZE),
+        (
+            "ESR (feature-space, DIAGNOSTIC ONLY): "
+            + _fmt_interval(summary.get("esr_feature_space_pct")).replace("**", ""),
+            BODY_SIZE,
+        ),
+        ("", BODY_SIZE),
+        (
+            "The two ESR rows are not interchangeable. The feature-space rate counts flows that "
+            "never completed a handshake; only the Phi-valid rate is a defensible claim about IDS weakness.",
+            BODY_SIZE,
+        ),
+        ("", BODY_SIZE),
+        ("POPULATION", BODY_SIZE + 2),
+        (
+            "Flows produced: {n_total}    Phi-valid: {n_phi_valid}    gate-rejected: {n_gate_rejected}    "
+            "rules fired: {rules}".format(
+                n_total=summary["population"]["n_total"],
+                n_phi_valid=summary["population"]["n_phi_valid"],
+                n_gate_rejected=summary["population"]["n_gate_rejected"],
+                rules=summary["detection"]["rules_hit_count"],
+            ),
+            BODY_SIZE,
+        ),
+    ]
+
+    techniques = summary.get("techniques") or []
+    if techniques:
+        rows += [("", BODY_SIZE), ("PER-TECHNIQUE BREAKDOWN", BODY_SIZE + 2)]
+        rows.append(("technique | produced | phi-valid | escaped(phi)", BODY_SIZE))
+        for row in techniques[:40]:
+            rows.append(
+                (
+                    f"{row['technique']} | {row['n_total']} | {row['n_valid']} | {row['n_escaped']}",
+                    BODY_SIZE,
+                )
+            )
+
+    rules = summary["detection"]["rules_hit"]
+    if rules:
+        rows += [("", BODY_SIZE), ("RULES THAT FIRED", BODY_SIZE + 2)]
+        rows += [(rule, BODY_SIZE) for rule in rules[:40]]
+
+    rows += [("", BODY_SIZE), ("INTEGRITY", BODY_SIZE + 2)]
+    rows.append((f"Measurement digest (reproducible): {report['integrity']['measurement_digest']}", BODY_SIZE))
+    rows.append((f"Report digest (incl. timestamp): {report['integrity']['report_digest']}", BODY_SIZE))
+    signature = report["integrity"].get("signature")
+    if signature:
+        rows.append((f"Signature ({signature['alg']}) over measurement digest: {signature['value']}", BODY_SIZE))
+    else:
+        rows.append(("Signature: none (no signing key configured)", BODY_SIZE))
+    rows.append(
+        ("Re-run the same inputs with the same tool version: the measurement digest must match.", BODY_SIZE)
+    )
+
+    if prov.get("inputs"):
+        rows += [("", BODY_SIZE), ("INPUTS", BODY_SIZE + 2)]
+        for item in prov["inputs"]:
+            rows.append((f"{item['path']}  sha256={item['sha256']}  records={item['records']}", BODY_SIZE))
+
+    if prov.get("notes"):
+        rows += [("", BODY_SIZE), ("NOTES", BODY_SIZE + 2)]
+        rows += [(note, BODY_SIZE) for note in prov["notes"]]
+
+    return rows
 
 
 def _fmt_interval(pct: Optional[Dict[str, Any]]) -> str:

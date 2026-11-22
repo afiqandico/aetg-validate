@@ -26,15 +26,31 @@ You do **not** need one to:
 
 ## Tiers
 
-| Tier | Includes | Price (annual, per organisation) |
-|---|---|---|
-| **Community** | CLI, all ingest formats, Phi-gated metrics, JSON/MD reports, 1 target | Free (AGPL-3.0) |
-| **Pro** | Commercial license, signed HTML/PDF reports, up to 5 targets, CI integration, rule-coverage pack | **USD 1 490** |
-| **Enterprise** | Unlimited targets, SSO, support SLA (48 h), custom rule packs, multi-site consolidated report | **USD 4 900** |
-| **Assessment** | We run the validation, write the report, present the findings | **USD 1 200 – 2 500** per engagement |
+Every row below describes something that exists in this repository **today**,
+except where the Status column says *roadmap*. Selling a feature that is not
+built is how software companies lose the only asset a validation tool has:
+credibility.
+
+| Tier | Includes | Price (annual, per organisation) | Status |
+|---|---|---|---|
+| **Community** | CLI, all ingest formats, Phi-gated metrics, JSON/MD/HTML/PDF reports, HMAC signing (`AETG_VALIDATE_KEY`), unlimited local runs | Free (AGPL-3.0) | available |
+| **Pro** | Commercial license (closed embedding / hosted use), next-business-day email support, rule-coverage pack, CI integration help | **USD 1 490** | available |
+| **Enterprise** | Unlimited targets, 48 h SLA, custom rule packs, review of your measurement setup before you publish a number | **USD 4 900** | available |
+| **Assessment** | We run the validation, write the report, present the findings | **USD 1 200 – 2 500** per engagement | available |
+| — | SSO, multi-site consolidated report, hosted dashboard | — | roadmap, not for sale |
 
 Prices are per organisation, not per seat. Startups, academic labs and
 individual researchers: ask — there is a reduced rate.
+
+## What you are actually paying for
+
+The code is the same in every tier, and that is on purpose: an auditor must be
+able to read the measurement path. What a paid tier buys is the **license
+freedom** (closed integration, hosted service) plus a human who answers and, for
+Assessment, someone who signs their name under the number.
+
+If you only need to test your own IDS internally, you never have to pay. That is
+a feature, not a leak.
 
 ## How to buy
 
