@@ -7,7 +7,7 @@ name = "aetg-validate"
 version = "0.1.0"
 description = "Phi-gated IDS/ML-NIDS evasion validation with Wilson confidence intervals"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Afiq Andico Pangimpian", email = "afiqandico13@gmail.com" }]
 keywords = ["ids", "suricata", "evasion", "security-control-validation", "ml-nids", "adversarial-ml"]
