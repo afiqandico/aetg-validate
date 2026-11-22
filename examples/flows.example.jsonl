@@ -1,0 +1,5 @@
+{"flow_id": "1", "technique": "tcp_fragmentation", "func_valid": true, "detected": true, "rule_id": "2001219:ET SCAN Potential SSH Scan", "p_ids": 0.9821}
+{"flow_id": "2", "technique": "tcp_fragmentation", "func_valid": true, "detected": false, "rule_id": null, "p_ids": 0.0312}
+{"flow_id": "3", "technique": "ttl_manipulation", "func_valid": true, "detected": true, "rule_id": "2010935:ET POLICY Outbound SSH", "p_ids": 0.9410}
+{"flow_id": "4", "technique": "ttl_manipulation", "func_valid": false, "detected": false, "rule_id": null, "p_ids": 0.0044}
+{"flow_id": "5", "technique": "window_size_scaling", "func_valid": true, "detected": true, "rule_id": "2013028:ET POLICY Suspicious NULL Scan", "p_ids": 0.9903}

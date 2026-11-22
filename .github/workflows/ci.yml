@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Demo end-to-end
+        run: |
+          aetg-validate demo --out /tmp/demo
+          test -f /tmp/demo/scan.json
+          test -f /tmp/demo/report.md
+          test -f /tmp/demo/report.html
+
+      - name: Digest re-verification
+        run: aetg-validate report --scan /tmp/demo/scan.json --out /tmp/verify
+
+      - name: Tamper detection must fail
+        run: |
+          python - <<'PY'
+          import json
+          p = "/tmp/demo/scan.json"
+          d = json.load(open(p))
+          d["summary"]["esr_phi"]["point"] = 0.0
+          d["summary"]["esr_phi"]["k"] = 0
+          json.dump(d, open("/tmp/forged.json", "w"))
+          PY
+          if aetg-validate report --scan /tmp/forged.json --out /tmp/forged; then
+            echo "FAIL: tampered report passed integrity check"; exit 1
+          fi
+          echo "OK: tampered report rejected"

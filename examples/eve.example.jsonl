@@ -1,0 +1,4 @@
+{"timestamp": "2026-11-22T10:00:01.000000+0800", "event_type": "alert", "flow_id": 1, "alert": {"signature_id": 2001219, "signature": "ET SCAN Potential SSH Scan", "severity": 2}}
+{"timestamp": "2026-11-22T10:00:02.000000+0800", "event_type": "alert", "flow_id": 3, "alert": {"signature_id": 2010935, "signature": "ET POLICY Outbound SSH", "severity": 3}}
+{"timestamp": "2026-11-22T10:00:03.000000+0800", "event_type": "flow", "flow_id": 2}
+{"timestamp": "2026-11-22T10:00:04.000000+0800", "event_type": "alert", "flow_id": 5, "alert": {"signature_id": 2013028, "signature": "ET POLICY Suspicious NULL Scan", "severity": 2}}

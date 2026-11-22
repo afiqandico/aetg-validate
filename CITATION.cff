@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this tool in academic work, please cite it as below."
+title: "AETG-Validate: Phi-gated IDS evasion validation with confidence intervals"
+abstract: >-
+  A command-line tool that measures IDS and ML-NIDS evasion rates only on
+  functionally valid network traffic, reporting every rate with a 95 % Wilson
+  confidence interval and a verifiable integrity digest.
+type: software
+authors:
+  - family-names: Pangimpian
+    given-names: Afiq Andico
+    email: afiqandico13@gmail.com
+    orcid: ""
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/afiqandico/aetg-validate"
+keywords:
+  - intrusion detection
+  - evasion
+  - security control validation
+  - adversarial machine learning
+  - Suricata
+version: 0.1.0
+date-released: "2026-11-22"
