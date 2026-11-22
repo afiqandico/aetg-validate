@@ -16,7 +16,7 @@ import hmac
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 TOOL_NAME = "aetg-validate"
 
@@ -28,6 +28,46 @@ def canonical_json(payload: Any) -> str:
 
 def digest(payload: Any) -> str:
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def measurement_payload(
+    *,
+    tool_version: str,
+    kind: str,
+    summary: Dict[str, Any],
+    inputs: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """The part of a report that must be *reproducible*.
+
+    Deliberately excludes the timestamp, the report title, free-text notes and
+    the input **paths**: two people scanning the same bytes on different
+    machines must arrive at the same measurement digest, or the reproducibility
+    claim is only decoration. Paths are replaced by content hashes.
+    """
+    return {
+        "tool_version": tool_version,
+        "kind": kind,
+        "summary": summary,
+        "inputs": sorted(
+            ({"sha256": item["sha256"], "records": item["records"]} for item in inputs),
+            key=lambda item: (item["sha256"], item["records"]),
+        ),
+    }
+
+
+def measurement_digest(
+    *,
+    tool_version: str,
+    kind: str,
+    summary: Dict[str, Any],
+    inputs: Sequence[Dict[str, Any]],
+) -> str:
+    """Digest over everything that a re-run can reproduce."""
+    return digest(
+        measurement_payload(
+            tool_version=tool_version, kind=kind, summary=summary, inputs=inputs
+        )
+    )
 
 
 def sign(payload_digest: str, key: Optional[str] = None) -> Optional[Dict[str, str]]:
@@ -107,13 +147,20 @@ def render_markdown(report: Dict[str, Any]) -> str:
         "",
         "## Integrity",
         "",
-        f"- Payload digest (SHA-256): `{report['integrity']['digest']}`",
+        f"- Measurement digest (reproducible, SHA-256): `{report['integrity']['measurement_digest']}`",
+        f"- Report digest (includes timestamp and title): `{report['integrity']['report_digest']}`",
     ]
     sig = report["integrity"].get("signature")
     if sig:
-        lines.append(f"- Signature: `{sig['alg']}` = `{sig['value']}`")
+        lines.append(f"- Signature over the measurement digest: `{sig['alg']}` = `{sig['value']}`")
     else:
         lines.append("- Signature: none (no signing key configured)")
+
+    lines += [
+        "",
+        "> Re-run the same inputs with the same tool version and the measurement",
+        "> digest must match. If it does not, either the inputs or the code changed.",
+    ]
 
     lines += ["", "## Inputs", ""]
     for item in prov.get("inputs", []):
@@ -189,7 +236,6 @@ def render_html(report: Dict[str, Any]) -> str:
         if sig
         else "<span class='muted'>none (no signing key configured)</span>"
     )
-
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -211,8 +257,11 @@ about IDS weakness.</p></div>
 {tech_html}
 {rules_html}
 <h2>Integrity</h2>
-<p>Payload digest (SHA-256): <code>{escape(report['integrity']['digest'])}</code><br>
-Signature: {sig_html}</p>
+<p>Measurement digest (reproducible, SHA-256): <code>{escape(report['integrity']['measurement_digest'])}</code><br>
+Report digest (includes timestamp and title): <code>{escape(report['integrity']['report_digest'])}</code><br>
+Signature over the measurement digest: {sig_html}</p>
+<p class="muted">Re-run the same inputs with the same tool version and the measurement
+digest must match. If it does not, either the inputs or the code changed.</p>
 <h2>Inputs</h2><ul>{inputs_html}</ul>
 </body></html>
 """

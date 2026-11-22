@@ -30,7 +30,15 @@ from .ingest import (
     read_suricata_alerts,
 )
 from .models import FlowRecord, ScanMetrics, TechniqueBreakdown
-from .report import TOOL_NAME, digest, render_html, render_markdown, sign, utc_now
+from .report import (
+    TOOL_NAME,
+    digest,
+    measurement_digest,
+    render_html,
+    render_markdown,
+    sign,
+    utc_now,
+)
 from .scan import compute, summarize
 
 DEFAULT_RULES = [
@@ -73,19 +81,34 @@ def _build_report(
     inputs: Sequence[Dict[str, Any]],
     notes: Sequence[str],
     key: Optional[str],
+    tool_version: str = __version__,
 ) -> Dict[str, Any]:
+    """Assemble a report with two digests.
+
+    ``measurement_digest`` covers only what a re-run can reproduce (tool
+    version, kind, summary, input content hashes) — no timestamp, no title, no
+    paths. ``report_digest`` covers the whole document including its provenance,
+    so nothing can be edited without being noticed. The signature is over the
+    measurement digest, because that is the claim someone else can re-derive.
+    """
     provenance = {
         "tool": TOOL_NAME,
-        "tool_version": __version__,
+        "tool_version": tool_version,
         "timestamp": utc_now(),
         "kind": kind,
         "inputs": list(inputs),
         "notes": list(notes),
     }
     payload = {"title": title, "provenance": provenance, "summary": summary}
-    payload_digest = digest(payload)
-    signature = sign(payload_digest, key)
-    payload["integrity"] = {"digest": payload_digest, "signature": signature}
+    report_d = digest(payload)
+    meas_d = measurement_digest(
+        tool_version=tool_version, kind=kind, summary=summary, inputs=inputs
+    )
+    payload["integrity"] = {
+        "measurement_digest": meas_d,
+        "report_digest": report_d,
+        "signature": sign(meas_d, key),
+    }
     return payload
 
 
@@ -270,17 +293,37 @@ def cmd_report(args: argparse.Namespace) -> int:
         raise CliError(f"scan file not found: {scan_path}")
     report = json.loads(scan_path.read_text(encoding="utf-8"))
 
-    stored = (report.get("integrity") or {}).get("digest")
-    if not stored:
-        raise CliError("scan file has no integrity digest; it was not produced by this tool")
-    recomputed = digest(
+    integrity = report.get("integrity") or {}
+    stored_meas = integrity.get("measurement_digest")
+    stored_rep = integrity.get("report_digest")
+    if not stored_meas or not stored_rep:
+        raise CliError(
+            "scan file has no measurement/report digest; it was not produced by "
+            "this tool (or predates 0.2.0)"
+        )
+
+    recomputed_rep = digest(
         {"title": report["title"], "provenance": report["provenance"], "summary": report["summary"]}
     )
-    if recomputed != stored:
-        print(
-            f"INTEGRITY CHECK FAILED: stored={stored[:16]}… recomputed={recomputed[:16]}…",
-            file=sys.stderr,
+    provenance = report["provenance"]
+    recomputed_meas = measurement_digest(
+        tool_version=provenance["tool_version"],
+        kind=provenance["kind"],
+        summary=report["summary"],
+        inputs=provenance.get("inputs", []),
+    )
+
+    failures = []
+    if recomputed_rep != stored_rep:
+        failures.append(
+            f"report digest: stored={stored_rep[:16]}… recomputed={recomputed_rep[:16]}…"
         )
+    if recomputed_meas != stored_meas:
+        failures.append(
+            f"measurement digest: stored={stored_meas[:16]}… recomputed={recomputed_meas[:16]}…"
+        )
+    if failures:
+        print("INTEGRITY CHECK FAILED: " + "; ".join(failures), file=sys.stderr)
         return 2
 
     out_dir = Path(args.out)
@@ -289,7 +332,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         (out_dir / "report.md").write_text(render_markdown(report), encoding="utf-8")
     if args.format in {"html", "all"}:
         (out_dir / "report.html").write_text(render_html(report), encoding="utf-8")
-    print(f"integrity OK  digest={stored[:16]}…")
+    print(f"integrity OK  measurement={stored_meas[:16]}…  report={stored_rep[:16]}…")
     print(f"rendered {args.format} into {out_dir}")
     return 0
 
@@ -303,7 +346,8 @@ def _print_result(report: Dict[str, Any], written: Dict[str, Path]) -> None:
     print(f"ESR (feature-space)      : {raw['point_pct']:.2f}% [{raw['low_pct']:.2f}, {raw['high_pct']:.2f}]  (k={raw['k']}, n={raw['n']})")
     print(f"FVR                      : {fvr['point_pct']:.2f}% [{fvr['low_pct']:.2f}, {fvr['high_pct']:.2f}]  (k={fvr['k']}, n={fvr['n']})")
     print(f"rules fired              : {summary['detection']['rules_hit_count']}")
-    print(f"digest                   : {report['integrity']['digest'][:32]}…")
+    print(f"measurement digest       : {report['integrity']['measurement_digest'][:32]}…  (reproducible)")
+    print(f"report digest            : {report['integrity']['report_digest'][:32]}…  (includes timestamp)")
     for kind, path in written.items():
         print(f"  {kind:4s} -> {path}")
 

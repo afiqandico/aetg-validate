@@ -39,6 +39,19 @@ jobs:
       - name: Digest re-verification
         run: aetg-validate report --scan /tmp/demo/scan.json --out /tmp/verify
 
+      - name: Measurement digest is reproducible across runs
+        run: |
+          aetg-validate demo --out /tmp/demo2 >/dev/null
+          python - <<'PY'
+          import json
+          a = json.load(open("/tmp/demo/scan.json"))["integrity"]["measurement_digest"]
+          b = json.load(open("/tmp/demo2/scan.json"))["integrity"]["measurement_digest"]
+          print("run1:", a)
+          print("run2:", b)
+          assert a == b, "measurement digest is not reproducible"
+          print("OK: reproducible")
+          PY
+
       - name: Tamper detection must fail
         run: |
           python - <<'PY'

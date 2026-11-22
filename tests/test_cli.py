@@ -104,3 +104,73 @@ def test_run_from_flow_file_with_suricata(tmp_path):
 
 def test_run_without_input_fails_cleanly(tmp_path):
     assert main(["run", "--out", str(tmp_path / "r")]) == 2
+
+
+# --- 0.2.0: reproducibility vs. tamper-detection ------------------------------
+
+
+def _write_flows(path, *, detected_second: bool):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps({"flow_id": "1", "technique": "ttl", "func_valid": True, "detected": True}),
+                json.dumps(
+                    {"flow_id": "2", "technique": "frag", "func_valid": True, "detected": detected_second}
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_measurement_digest_is_identical_across_paths_and_titles(tmp_path, monkeypatch):
+    """The reproducibility claim: same bytes, different machine, same digest."""
+    monkeypatch.delenv("AETG_VALIDATE_KEY", raising=False)
+    a = _write_flows(tmp_path / "a" / "flows.jsonl", detected_second=False)
+    b = _write_flows(tmp_path / "b" / "elsewhere.jsonl", detected_second=False)
+    a.parent.mkdir(parents=True, exist_ok=True)
+    b.parent.mkdir(parents=True, exist_ok=True)
+
+    assert main(["run", "--input", str(a), "--out", str(tmp_path / "oa"), "--title", "box A"]) == 0
+    assert main(["run", "--input", str(b), "--out", str(tmp_path / "ob"), "--title", "box B"]) == 0
+
+    ra = json.loads((tmp_path / "oa" / "scan.json").read_text(encoding="utf-8"))
+    rb = json.loads((tmp_path / "ob" / "scan.json").read_text(encoding="utf-8"))
+
+    assert ra["integrity"]["measurement_digest"] == rb["integrity"]["measurement_digest"]
+    # The full report digest does differ: different path, different title.
+    assert ra["integrity"]["report_digest"] != rb["integrity"]["report_digest"]
+
+
+def test_measurement_digest_changes_when_the_measurement_changes(tmp_path, monkeypatch):
+    monkeypatch.delenv("AETG_VALIDATE_KEY", raising=False)
+    same = _write_flows(tmp_path / "same" / "flows.jsonl", detected_second=False)
+    other = _write_flows(tmp_path / "other" / "flows.jsonl", detected_second=True)
+    same.parent.mkdir(parents=True, exist_ok=True)
+    other.parent.mkdir(parents=True, exist_ok=True)
+
+    assert main(["run", "--input", str(same), "--out", str(tmp_path / "o1")]) == 0
+    assert main(["run", "--input", str(other), "--out", str(tmp_path / "o2")]) == 0
+
+    d1 = json.loads((tmp_path / "o1" / "scan.json").read_text(encoding="utf-8"))["integrity"]
+    d2 = json.loads((tmp_path / "o2" / "scan.json").read_text(encoding="utf-8"))["integrity"]
+    assert d1["measurement_digest"] != d2["measurement_digest"]
+
+
+def test_legacy_report_without_new_digests_is_rejected(tmp_path):
+    legacy = tmp_path / "legacy.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "title": "old",
+                "provenance": {"tool_version": "0.1.0", "kind": "x", "timestamp": "t", "inputs": [], "notes": []},
+                "summary": {"population": {"n_total": 1}},
+                "integrity": {"digest": "deadbeef", "signature": None},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main(["report", "--scan", str(legacy), "--out", str(tmp_path / "x")]) == 2

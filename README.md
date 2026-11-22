@@ -93,8 +93,13 @@ Flow record fields (`flows.jsonl`, one object per line):
 aetg-validate report --scan aetg-report/scan.json --out verified/
 ```
 
-The digest is recomputed. A tampered report fails with exit code 2 — try it:
+Both digests are recomputed. A tampered report fails with exit code 2 — try it:
 edit `esr_phi.point` in `scan.json` and watch the check refuse.
+
+Because `measurement_digest` ignores timestamps, titles, notes and input paths,
+two people scanning the same bytes on different machines get the **same**
+measurement digest. That is the number worth quoting in a report — quote it,
+not the report digest.
 
 ## What this tool claims — and what it does not
 
@@ -103,7 +108,10 @@ edit `esr_phi.point` in `scan.json` and watch the check refuse.
 * evasion rates are measured only on functionally valid traffic;
 * every rate carries a Wilson 95 % interval, so `0/200` reads as
   `[0, 1.88] %`, not as "impossible";
-* a report carries SHA-256 digests of its inputs and can be re-verified.
+* a report carries a **reproducible** `measurement_digest` (over tool version,
+  summary and input content hashes — no timestamp, no paths) plus a
+  `report_digest` over the whole document, so a re-run on the same bytes yields
+  the same measurement digest and any edit is still detected.
 
 **Does not claim**
 
